@@ -1,43 +1,53 @@
+'use strict';
+require('dotenv').config();
+const cors = require('cors');
 const express = require('express');
-const cors = require('cors'); // Import the cors module
+const multer = require('multer');
+const axios = require('axios');
+const Jimp = require('jimp');
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-const corsOptions = {
-  origin: 'http://localhost:3001', // Define the allowed origin for CORS
-};
+// Enable CORS for all routes
+app.use(cors());
 
-app.use(cors(corsOptions));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
 
-app.get('/analyze-image', async (req, res) => {
-  const imageUrl = req.query.url; // Extract the image URL from the query parameter
+// Image upload and stats
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
-  if (!imageUrl) {
-    // Check if the image URL is provided in the request
-    return res.status(400).send('No image URL provided'); // Respond with a 400 Bad Request if not provided
-  }
-
+app.post('/api/process-image', upload.single('image'), async (req, res) => {
   try {
-    // Use dynamic import to fetch the image using node-fetch
-    const { default: fetch } = await import('node-fetch');
-    const response = await fetch(imageUrl); // Fetch the image data from the provided URL
+      const image = req.file;
+      console.log('Received image:', image); // Line for debugging
+      const jimpImage = await Jimp.read(image.buffer);
 
-    if (!response.ok) {
-      // Check if the image fetch was successful (HTTP status 200)
-      throw new Error('Failed to fetch image'); // If not, throw an error
-    }
+      // Extract image statistics
+      const fileName = image.originalname;
+      const fileType = image.mimetype;
+      const fileSize = image.size;
 
-    const contentType = response.headers.get('content-type'); // Get the content-type header
-    const contentLength = response.headers.get('content-length'); // Get the content-length header
+      // Prepare the response
+      const response = {
+          fileName,
+          fileType,
+          fileSize,
+          // Other image statistics you want to include
+      };
 
-    res.json({
-      fileType: contentType, // Respond with the content type (image format)
-      fileSize: contentLength, // Respond with the content length (image size in bytes)
-    });
+      // Send the response back to the client
+      res.json(response);
   } catch (error) {
-    console.error('Error fetching image:', error); // Log any errors that occur during image fetching
-    res.status(500).send('Error processing image'); // Respond with a 500 Internal Server Error
+      console.error('Error processing image:', error);
+      res.status(500).send('Error processing image');
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// Start the server
+app.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}...`);
+});
